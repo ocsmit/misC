@@ -4,14 +4,17 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "util.h"
+#include <math.h>
 
 #define getName(var)  #var
 
+#define FALSE 0
+#define TRUE 1
 
 typedef struct {
-    size_t rows;
-    size_t cols;
-    int member_size;
+    int  rows;
+    int  cols;
+    size_t member_size;
     double *data;         
 } Array2d;
 
@@ -23,13 +26,13 @@ typedef struct {
  *
  * @return     Pointer to Array2d struct
  */
-Array2d *Array2d_malloc(size_t rows, size_t cols) {
+Array2d *Array2d_malloc(int rows, int cols) {
 
-	Array2d *array = (Array2d*) malloc(sizeof(Array2d));
 	// Allocate all the memory needed for the struct plus the 2d array
-	array = malloc(sizeof(*array));
+	Array2d *array = (Array2d*) malloc(sizeof(Array2d));
 	assert(array != NULL);
 
+	// Possible to alloc memory for array in the struct malloc?
 	double *mat = (double*) malloc(sizeof(double[cols][rows]));
 	assert(mat != NULL);
 
@@ -48,9 +51,14 @@ Array2d *Array2d_malloc(size_t rows, size_t cols) {
  */
 void Array2d_free(Array2d *array) {
 	// TODO: Add checks
-	free(array->data);
+	free(array->data), array->data = NULL;
 	free(array);
-};
+}
+
+
+Array2d *Array2d_copy(Array2d *array) {
+	return Array2d_malloc(array->rows, array->cols);
+}
 
 /**
  * @brief     Get matrix value at (row, col) 
@@ -59,16 +67,14 @@ void Array2d_free(Array2d *array) {
  * @param[in]  row    The row
  * @param[in]  col    The col
  *
- * @return     returns either value at (row, col), or 0
+ * @return     returns either value at (row, col), or NAN
  */
 double Array2d_get(Array2d *array, int row, int col){
 	if(row < array->rows && col < array->cols) {
-		//return array->data[col + (row * array->cols)];
 		return array->data[row * array->cols + col];
 	}
 	else {
-		// add warning for outof bounds
-		return 0;
+		return NAN;
 	}
 }
 
@@ -84,8 +90,6 @@ void Array2d_assign(Array2d *array, int row, int col, double value){
 	if(row < array->rows && col < array->cols) {
 		array->data[row * array->cols + col] = value;
 	} else {
-		// add warning for outof bounds
-		//log_warn("(%d, %d)\t Out of bounds", row, col);
 	}
 }
 
@@ -106,4 +110,80 @@ void Array2d_print(Array2d* array){
 		}
 		printf("\n");
 	}
+}
+
+/**
+ * @brief      Compares the axis size of two arrays
+ *
+ * @param      arr_a  Array2d a
+ * @param      arr_b  Array2d b
+ * @param[in]  axis   Axis to compare, 0 = row, 1 = col, ...
+ *
+ * @return     Returns 1 if axis size is the same, 0 otherwise
+ */
+int Array2d_compare_axis(Array2d *arr_a, Array2d *arr_b, int axis) {
+	switch (axis) {
+	case 0:
+		if (arr_a->rows == arr_b->rows) return 1;
+		break;
+	case 1:
+		if (arr_a->cols == arr_b->cols) return 1;
+		break;
+	}
+	return 0;
+}
+
+
+int Array2d_same_size(Array2d *arr_a, Array2d *arr_b) {
+	if (Array2d_compare_axis(arr_a, arr_b, 0) != 1 ||
+		Array2d_compare_axis(arr_a, arr_b, 1) != 1) {
+		return FALSE;
+	} else {
+		return TRUE;
+	}
+}
+
+Array2d *Array2d_add(Array2d *arr_a, Array2d *arr_b) {
+	int rows, cols;
+
+	if (Array2d_same_size(arr_a, arr_b) == FALSE) {
+		return 0;
+	}
+
+	Array2d *arr_result = Array2d_copy(arr_a);
+	rows = arr_result->rows;
+	cols = arr_result->cols;
+
+	// Difficulty of SIMD for arm chip?
+	// Difficulty of portable SIMD?
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j ++) {
+			Array2d_assign(arr_result, i, j, 
+				Array2d_get(arr_a, i, j) + Array2d_get(arr_b, i, j));
+		}
+	}
+
+	return arr_result;
+}
+
+
+Array2d *Array2d_subtract(Array2d *arr_a, Array2d *arr_b) {
+	int rows, cols;
+
+	if (Array2d_same_size(arr_a, arr_b) == FALSE) {
+		return 0;
+	}
+
+	Array2d *arr_result = Array2d_copy(arr_a);
+	rows = arr_result->rows;
+	cols = arr_result->cols;
+
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j ++) {
+			Array2d_assign(arr_result, i, j, 
+				Array2d_get(arr_a, i, j) - Array2d_get(arr_b, i, j));
+		}
+	}
+
+	return arr_result;
 }
